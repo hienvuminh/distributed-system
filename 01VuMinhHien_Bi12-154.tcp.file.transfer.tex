@@ -1,0 +1,210 @@
+\documentclass{article}
+\usepackage{graphicx} 
+\usepackage{listings}
+
+\begin{document}
+
+\title{TCP File Transfer Protocol}
+\author{Vu Minh Hien Bi12-154}
+\date{\today}
+
+\maketitle
+
+\begin{abstract}
+A simple file transfer protocol implemented using TCP/IP sockets in C++. The server listens for incoming connections on a specified port and receives a file from the client. The client connects to the server and sends the file contents.
+\end{abstract}
+
+\section{Protocol Design}
+
+The protocol follows a basic request-response pattern:
+
+\subsection{Client}
+
+1. Connects to the server on the designated port.\newline 
+2. Sends the filename of the file to be transferred.\newline 
+3. Sends the file data in chunks.\newline 
+
+\includegraphics[width=1\linewidth]{image2.png}
+\subsection{Server}
+
+1. Listens for incoming connections on the specified port.\newline 
+2. Accepts a connection from a client.\newline 
+3. Receives the filename from the client.\newline 
+4. Receives the file data in chunks and writes it to a file on the server.\newline 
+
+\includegraphics[width=1\linewidth]{image1.png}
+
+\section{System Organization}
+
+The system consists of two main components:
+
+\subsection{Server}
+
+This program listens for incoming connections and receives files from clients.
+\begin{lstlisting}[language=C++, caption=Sever C++ Code, label=lst:code]
+#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <fstream>
+#include <cstring>
+
+#define SIZE 99999
+
+void write_file(int sockfd){
+  int n;
+  std::ofstream fp;
+  std::string filename = "recvice.txt";
+  std::cout << "Receiving file: " << filename << std::endl;
+  char buffer[SIZE];
+
+  fp.open(filename);
+  while (1) {
+    n = recv(sockfd, buffer, SIZE, 0);
+    if (n <= 0){
+      break;
+      return;
+    }
+    fp << buffer;
+    std::memset(buffer, 0, SIZE);
+  }
+  return;
+}
+
+int main()
+{
+  std::string ip = "127.0.0.1";
+  int port = 8080;
+  int e;
+
+  int sockfd, new_sock;
+  struct sockaddr_in server_addr, new_addr;
+  socklen_t addr_size;
+  char buffer[SIZE];
+
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if(sockfd < 0) {
+    perror("[-]Error in socket");
+    exit(1);
+  }
+  std::cout << "[+]Server socket created successfully.\n";
+
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = port;
+  server_addr.sin_addr.s_addr = inet_addr(ip.c_str());
+
+  e = bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
+  if(e < 0) {
+    perror("[-]Error in bind");
+    exit(1);
+  }
+  std::cout << "[+]Binding successfull.\n";
+
+  if(listen(sockfd, 10) == 0){
+    std::cout << "[+]Listening....\n";
+  }else{
+    perror("[-]Error in listening");
+    exit(1);
+  }
+
+  addr_size = sizeof(new_addr);
+  new_sock = accept(sockfd, (struct sockaddr*)&new_addr, &addr_size);
+  write_file(new_sock);
+  std::cout << "[+]Data written in the file successfully.\n";
+
+  return 0;
+}
+\end{lstlisting}
+
+\subsection{Client}
+
+This program connects to the server, sends a filename, and transmits the file content.
+\begin{lstlisting}[language=C++, caption=Client C++ Code, label=lst:code]
+#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
+#include <iostream>
+#include <fstream>
+#include <cstring>
+#include <arpa/inet.h>
+#define SIZE 99999
+
+void send_file(std::ifstream& fp, int sockfd){
+  int n;
+  char data[SIZE] = {0};
+
+  while(fp.getline(data, SIZE)) {
+    if (send(sockfd, data, sizeof(data), 0) == -1) {
+      perror("[-]Error in sending file.");
+      exit(1);
+    }
+    std::memset(data, 0, SIZE);
+  }
+}
+
+int main(){
+  std::string ip = "127.0.0.1";
+  int port = 8080;
+  int e;
+
+  int sockfd;
+  struct sockaddr_in server_addr;
+  std::ifstream fp;
+  std::string filename;
+  std::cout << "Enter filename to send: ";
+  std::getline(std::cin, filename);
+
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if(sockfd < 0) {
+    perror("[-]Error in socket");
+    exit(1);
+  }
+  std::cout << "[+]Server socket created successfully.\n";
+
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = port;
+  server_addr.sin_addr.s_addr = inet_addr(ip.c_str());
+
+  e = connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
+  if(e == -1) {
+    perror("[-]Error in socket");
+    exit(1);
+  }
+  std::cout << "[+]Connected to Server.\n";
+  std::cout << "Enter filename to send: ";
+  std::getline(std::cin, filename);
+  fp.open(filename);
+  if (!fp) {
+    perror("[-]Error in reading file.");
+    exit(1);
+  }
+
+  send_file(fp, sockfd);
+  std::cout << "[+]File data sent successfully.\n";
+
+  std::cout << "[+]Closing the connection.\n";
+  close(sockfd);
+
+  return 0;
+}
+\end{lstlisting}
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{Socket_server-1-modified.png}
+    \caption{TCP file transfer flowchart}
+    \label{fig:enter-label}
+\end{figure}
+\end{document}
+
